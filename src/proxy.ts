@@ -6,6 +6,7 @@ export async function proxy(request: NextRequest) {
   const session = await verifySession(request.cookies.get(SESSION_COOKIE)?.value);
   const isLogin = pathname === "/login";
   if (pathname === "/session-reset") return NextResponse.next();
+  if (pathname === "/api/health/run") return NextResponse.next(); // guarded by CRON_SECRET
 
   if (!session && !isLogin) {
     const response = NextResponse.redirect(new URL("/login", request.url));
