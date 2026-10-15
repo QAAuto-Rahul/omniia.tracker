@@ -10,6 +10,7 @@ const ENTITY_LABEL: Record<string, string> = {
   service: "Service",
   env_var: "Variable",
   health_check: "Health check",
+  document: "Document",
 };
 
 const ACTION_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {

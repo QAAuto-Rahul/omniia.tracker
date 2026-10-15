@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, History, LogOut, PackageOpen, type LucideIcon } from "lucide-react";
+import { Activity, FileText, History, LogOut, PackageOpen, type LucideIcon } from "lucide-react";
 import { BrandMark } from "@/components/brand";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ type NavItem = { href: string; label: string; icon: LucideIcon; description: str
 const NAV: NavItem[] = [
   { href: "/env-pack", label: "EnvPack", icon: PackageOpen, description: "Environment variables per service" },
   { href: "/status", label: "Service Health", icon: Activity, description: "Up / down in every environment" },
+  { href: "/documents", label: "Documents", icon: FileText, description: "Spreadsheet and document links" },
   { href: "/audit", label: "Audit Log", icon: History, description: "Who changed what, and when" },
 ];
 
