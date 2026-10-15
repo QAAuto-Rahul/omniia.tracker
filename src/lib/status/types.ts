@@ -1,4 +1,4 @@
-export type CheckState = "up" | "down" | "pending" | "paused";
+export type CheckState = "up" | "down" | "pending" | "paused" | "not_deployed";
 
 export type HealthCheck = {
   id: number;
@@ -8,6 +8,7 @@ export type HealthCheck = {
   expected_status: number;
   expect_text: string;
   enabled: boolean;
+  deployed?: boolean;
   state: CheckState;
   last: {
     ok: boolean;

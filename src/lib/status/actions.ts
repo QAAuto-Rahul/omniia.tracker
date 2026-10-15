@@ -58,7 +58,7 @@ export async function saveCheck(serviceId: number, environmentId: number, input:
     const now = new Date();
     let check = await checks.findOneAndUpdate(
       { service_id: sId, environment_id: eId },
-      { $set: { url, expected_status, expect_text, enabled, updated_at: now } },
+      { $set: { url, expected_status, expect_text, enabled, deployed: true, updated_at: now } },
       { returnDocument: "after" },
     );
     if (!check) {
@@ -70,6 +70,7 @@ export async function saveCheck(serviceId: number, environmentId: number, input:
         expected_status,
         expect_text,
         enabled,
+        deployed: true,
         created_by: user.email,
         created_at: now,
         updated_at: now,
@@ -78,6 +79,35 @@ export async function saveCheck(serviceId: number, environmentId: number, input:
     }
     await audit(user.email, "save", "health_check", check._id, url);
     if (enabled) await runCheck(check._id);
+    revalidatePath("/status");
+    return { ok: true };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Marks a service/environment as intentionally not deployed, creating a placeholder if needed. */
+export async function markNotDeployed(serviceId: number, environmentId: number, notDeployed: boolean): Promise<Result> {
+  const user = await requireUser();
+  try {
+    const sId = parseId(serviceId);
+    const eId = parseId(environmentId);
+    const now = new Date();
+    const checks = await col("health_checks");
+    let check = await checks.findOneAndUpdate(
+      { service_id: sId, environment_id: eId },
+      { $set: { deployed: !notDeployed, enabled: !notDeployed, updated_at: now } },
+      { returnDocument: "after" },
+    );
+    if (!check) {
+      check = {
+        _id: await nextId("health_checks"), service_id: sId, environment_id: eId,
+        url: "", expected_status: 200, expect_text: "", enabled: false, deployed: false,
+        created_by: user.email, created_at: now, updated_at: now,
+      };
+      await checks.insertOne(check);
+    }
+    await audit(user.email, "deployment_status", "health_check", check._id, notDeployed ? "not deployed" : "deployed");
     revalidatePath("/status");
     return { ok: true };
   } catch (err) {

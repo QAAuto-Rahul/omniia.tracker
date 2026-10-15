@@ -6,6 +6,7 @@ const STYLES: Record<CheckState, string> = {
   down: "bg-red-500",
   pending: "bg-zinc-300",
   paused: "bg-zinc-300",
+  not_deployed: "bg-red-600",
 };
 
 export const STATE_LABEL: Record<CheckState, string> = {
@@ -13,6 +14,7 @@ export const STATE_LABEL: Record<CheckState, string> = {
   down: "Down",
   pending: "Waiting for first check",
   paused: "Paused",
+  not_deployed: "Not deployed",
 };
 
 export function StatusDot({ state, className }: { state: CheckState; className?: string }) {

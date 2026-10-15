@@ -38,6 +38,7 @@ export type Docs = {
     expected_status: number;
     expect_text: string;
     enabled: boolean;
+    deployed?: boolean;
     created_by: string;
     created_at: Date;
     updated_at: Date;

@@ -49,7 +49,7 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
   }, [board.checks]);
 
   const counts = useMemo(() => {
-    const c = { up: 0, down: 0, pending: 0, paused: 0 };
+    const c = { up: 0, down: 0, pending: 0, paused: 0, not_deployed: 0 };
     for (const check of board.checks) c[check.state]++;
     return c;
   }, [board.checks]);
@@ -101,13 +101,14 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {(
           [
             ["up", "Up", "text-emerald-600"],
             ["down", "Down", "text-red-600"],
             ["pending", "Waiting", "text-muted-foreground"],
             ["paused", "Paused", "text-muted-foreground"],
+            ["not_deployed", "Not deployed", "text-red-700"],
           ] as const
         ).map(([key, label, color]) => (
           <button
@@ -181,6 +182,7 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
                             className={cn(
                               "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted",
                               check?.state === "down" && "bg-red-50 hover:bg-red-100",
+                              check?.state === "not_deployed" && "bg-red-600 text-white hover:bg-red-700",
                             )}
                             title={check?.last?.error ?? check?.url ?? "Set a health URL"}
                           >
@@ -191,7 +193,8 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
                                   <span
                                     className={cn(
                                       "block text-xs font-medium",
-                                      check.state === "down" && "text-red-700",
+                                      (check.state === "down" || check.state === "not_deployed") && "text-red-700",
+                                      check.state === "not_deployed" && "text-white",
                                       check.state === "up" && "text-emerald-700",
                                     )}
                                   >
@@ -200,8 +203,8 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
                                       <span className="font-normal text-muted-foreground"> · {check.last.latency_ms} ms</span>
                                     )}
                                   </span>
-                                  <span className="block truncate text-[11px] text-muted-foreground" suppressHydrationWarning>
-                                    {check.state === "down" && check.last?.error
+                                  <span className={cn("block truncate text-[11px] text-muted-foreground", check.state === "not_deployed" && "text-white/80")} suppressHydrationWarning>
+                                    {check.state === "not_deployed" ? "Not deployed" : check.state === "down" && check.last?.error
                                       ? check.last.error
                                       : check.last
                                         ? `${ago(check.last.checked_at, now)}${check.uptime_24h != null ? ` · ${check.uptime_24h}% 24h` : ""}`

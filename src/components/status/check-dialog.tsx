@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EnvBadge } from "@/components/envpack/env-badge";
-import { checkNow, deleteCheck, saveCheck } from "@/lib/status/actions";
+import { checkNow, deleteCheck, markNotDeployed, saveCheck } from "@/lib/status/actions";
 import type { HealthCheck } from "@/lib/status/types";
 import { HistoryBars, STATE_LABEL, StatusDot } from "./status-dot";
 
@@ -44,7 +44,8 @@ function CheckForm({ target, onDone }: { target: CellTarget; onDone: () => void 
   const [url, setUrl] = useState(check?.url ?? "");
   const [expectedStatus, setExpectedStatus] = useState(String(check?.expected_status ?? 200));
   const [expectText, setExpectText] = useState(check?.expect_text ?? "");
-  const [enabled, setEnabled] = useState(check?.enabled ?? true);
+  const [enabled, setEnabled] = useState(check?.deployed === false ? true : check?.enabled ?? true);
+  const [notDeployed, setNotDeployed] = useState(check?.deployed === false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -52,6 +53,13 @@ function CheckForm({ target, onDone }: { target: CellTarget; onDone: () => void 
     e.preventDefault();
     setError(null);
     startTransition(async () => {
+      if (notDeployed) {
+        const res = await markNotDeployed(service.id, environment.id, true);
+        if (!res.ok) return setError(res.error);
+        toast.success(`${service.name} marked not deployed in ${environment.name}`);
+        onDone();
+        return;
+      }
       const res = await saveCheck(service.id, environment.id, {
         url,
         expectedStatus: Number(expectedStatus),
@@ -98,6 +106,14 @@ function CheckForm({ target, onDone }: { target: CellTarget; onDone: () => void 
         </div>
       )}
 
+      <div className="grid gap-2">
+        <label className="flex items-center gap-2.5 text-sm">
+          <Checkbox checked={notDeployed} onCheckedChange={(c) => setNotDeployed(c === true)} disabled={pending} />
+          Service not deployed in this environment
+        </label>
+      </div>
+
+      {!notDeployed && <>
       <div className="grid gap-2">
         <Label htmlFor="check-url">Health URL</Label>
         <div className="flex gap-2">
@@ -153,6 +169,7 @@ function CheckForm({ target, onDone }: { target: CellTarget; onDone: () => void 
         <Checkbox checked={enabled} onCheckedChange={(c) => setEnabled(c === true)} disabled={pending} />
         Enabled (uncheck to pause)
       </label>
+      </>}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -193,9 +210,9 @@ function CheckForm({ target, onDone }: { target: CellTarget; onDone: () => void 
         </div>
         <div className="flex gap-2">
           <DialogClose render={<Button type="button" variant="outline" disabled={pending} />}>Cancel</DialogClose>
-          <Button type="submit" disabled={pending || !url.trim()}>
+          <Button type="submit" disabled={pending || (!notDeployed && !url.trim())}>
             {pending && <Loader2 className="animate-spin" />}
-            Save & check
+            {notDeployed ? "Mark not deployed" : "Save & check"}
           </Button>
         </div>
       </DialogFooter>
