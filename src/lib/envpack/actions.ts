@@ -16,6 +16,24 @@ import {
 
 export type ActionResult<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 export type ImportCounts = { created: number; updated: number; skipped: number };
+export type ServiceDeveloper = { name: string; email: string };
+export type VariableSearchMatch = { serviceId: number; serviceName: string; key: string; value: string };
+
+function validateDevelopers(input: unknown): ServiceDeveloper[] {
+  if (input == null) return [];
+  if (!Array.isArray(input) || input.length > 20) throw new ValidationError("Add no more than 20 developers.");
+  return input.flatMap((entry) => {
+    const name = String(entry?.name ?? "").trim();
+    const email = String(entry?.email ?? "").trim().toLowerCase();
+    if (!name && !email) return [];
+    if (!name) throw new ValidationError("Enter a name for each developer.");
+    if (name.length > 100) throw new ValidationError("Developer names must be at most 100 characters.");
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new ValidationError(`Enter a valid email address for ${name}.`);
+    }
+    return [{ name, email }];
+  });
+}
 
 async function run<T extends object>(
   fn: (user: CurrentUser) => Promise<T>,
@@ -185,16 +203,18 @@ export async function deleteEnvironment(id: number): Promise<ActionResult> {
 }
 
 
-export async function createService(input: { name: string; description?: string }): Promise<ActionResult<{ id: number }>> {
+export async function createService(input: { name: string; description?: string; developers?: ServiceDeveloper[] }): Promise<ActionResult<{ id: number }>> {
   return run(async (user) => {
     const name = validateName(input.name, "Service name");
     const description = validateDescription(input.description);
+    const developers = validateDevelopers(input.developers);
     const now = new Date();
     const id = await nextId("services");
     await (await col("services")).insertOne({
       _id: id,
       name,
       description,
+      developers,
       created_by: user.email,
       created_at: now,
       updated_at: now,
@@ -204,19 +224,55 @@ export async function createService(input: { name: string; description?: string 
   }, "A service with that name already exists.");
 }
 
-export async function updateService(id: number, input: { name: string; description?: string }): Promise<ActionResult> {
+export async function updateService(id: number, input: { name: string; description?: string; developers?: ServiceDeveloper[] }): Promise<ActionResult> {
   return run(async (user) => {
     const serviceId = parseId(id);
     const name = validateName(input.name, "Service name");
     const description = validateDescription(input.description);
+    const developers = validateDevelopers(input.developers);
     const res = await (await col("services")).updateOne(
       { _id: serviceId },
-      { $set: { name, description, updated_at: new Date() } },
+      { $set: { name, description, developers, updated_at: new Date() } },
     );
     if (!res.matchedCount) throw new ValidationError("Service not found.");
     await audit(user.email, "update", "service", serviceId, name);
     return {};
   }, "A service with that name already exists.");
+}
+
+/** Search keys and decrypted values within one environment. */
+export async function searchEnvironmentVars(
+  environmentId: number,
+  searchTerm: string,
+): Promise<ActionResult<{ matches: VariableSearchMatch[] }>> {
+  await requireUser();
+  try {
+    const envId = parseId(environmentId);
+    const term = String(searchTerm ?? "").trim().toLowerCase();
+    if (term.length < 2) return { ok: true, matches: [] };
+    if (term.length > 100) throw new ValidationError("Search must be 100 characters or fewer.");
+    await mustExist("environments", envId, "Environment");
+
+    const [rows, services] = await Promise.all([
+      (await col("env_vars")).find({ environment_id: envId }).sort({ service_id: 1, key: 1 }).toArray(),
+      (await col("services")).find({}, { projection: { name: 1 } }).toArray(),
+    ]);
+    const serviceNames = new Map(services.map((service) => [service._id, service.name]));
+    const matches: VariableSearchMatch[] = [];
+    for (const row of rows) {
+      const value = decryptValue(row.value_enc);
+      if (!row.key.toLowerCase().includes(term) && !value.toLowerCase().includes(term)) continue;
+      const serviceName = serviceNames.get(row.service_id);
+      if (!serviceName) continue;
+      matches.push({ serviceId: row.service_id, serviceName, key: row.key, value });
+      if (matches.length === 50) break;
+    }
+    return { ok: true, matches };
+  } catch (err) {
+    if (err instanceof ValidationError) return { ok: false, error: err.message };
+    console.error("[envpack search]", err);
+    return { ok: false, error: "Could not search environment values. Please try again." };
+  }
 }
 
 export async function deleteService(id: number): Promise<ActionResult> {

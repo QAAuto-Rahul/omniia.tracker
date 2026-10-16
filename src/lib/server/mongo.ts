@@ -8,7 +8,7 @@ export type Docs = {
   users: { _id: number; email: string; created_at: Date; last_login_at: Date | null };
   otp_codes: { _id: string; code_hash: string; expires_at: Date; attempts: number; sent_at: Date };
   environments: { _id: number; name: string; description: string; created_by: string; created_at: Date; updated_at: Date };
-  services: { _id: number; name: string; description: string; created_by: string; created_at: Date; updated_at: Date };
+  services: { _id: number; name: string; description: string; developers?: { name: string; email: string }[]; created_by: string; created_at: Date; updated_at: Date };
   documents: { _id: number; name: string; description: string; url: string; kind: "excel" | "document"; created_by: string; created_at: Date; updated_at: Date };
   env_vars: {
     _id: number;

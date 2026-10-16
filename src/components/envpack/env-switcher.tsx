@@ -25,11 +25,13 @@ type Props = {
   currentId?: number;
   /** When set, switching environment stays on this service. */
   serviceId?: number;
+  /** Override the route used when switching environments. */
+  basePath?: string;
   /** Per-environment variable counts to show in the list (defaults to each environment's total). */
   counts?: Record<number, number>;
 };
 
-export function EnvSwitcher({ environments, currentId, serviceId, counts }: Props) {
+export function EnvSwitcher({ environments, currentId, serviceId, counts, basePath = "/env-pack" }: Props) {
   const router = useRouter();
   const [dialog, setDialog] = useState<"create" | "edit" | "delete" | null>(null);
   const current = environments.find((e) => e.id === currentId);
@@ -40,7 +42,7 @@ export function EnvSwitcher({ environments, currentId, serviceId, counts }: Prop
     if (currentId) document.cookie = `${LAST_ENV_COOKIE}=${currentId}; path=/; max-age=31536000; samesite=lax`;
   }, [currentId]);
 
-  const hrefFor = (envId: number | string) => `/env-pack/${envId}${serviceId ? `/services/${serviceId}` : ""}`;
+  const hrefFor = (envId: number | string) => `${basePath}/${envId}${serviceId ? `/services/${serviceId}` : ""}`;
   const countFor = (env: Environment) => counts?.[env.id] ?? env.var_count;
   const items = environments.map((e) => ({ value: String(e.id), label: e.name }));
 

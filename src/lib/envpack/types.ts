@@ -9,10 +9,13 @@ export type ServiceSummary = {
   id: number;
   name: string;
   description: string;
+  developers: ServiceDeveloper[];
   var_count: number;
   total_var_count: number;
   updated_at: string;
 };
+
+export type ServiceDeveloper = { name: string; email: string };
 
 export type EnvVar = {
   id: number;
@@ -23,7 +26,7 @@ export type EnvVar = {
 };
 
 export type ServiceDetail = {
-  service: { id: number; name: string; description: string };
+  service: { id: number; name: string; description: string; developers: ServiceDeveloper[] };
   environment: { id: number; name: string };
   vars: EnvVar[];
   envCounts: { id: number; name: string; var_count: number }[];

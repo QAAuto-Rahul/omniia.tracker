@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { KeyRound, MoreVertical, Pencil, Plus, Search, Server, Trash2 } from "lucide-react";
+import { KeyRound, Loader2, MoreVertical, Pencil, Plus, Search, Server, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { useDialogTarget } from "@/hooks/use-dialog-target";
-import { deleteService } from "@/lib/envpack/actions";
+import { deleteService, searchEnvironmentVars, type VariableSearchMatch } from "@/lib/envpack/actions";
 import type { Environment, ServiceSummary } from "@/lib/envpack/types";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -23,14 +23,57 @@ import { ServiceDialog } from "./service-dialog";
 
 export function ServicesPanel({ environment, services }: { environment: Environment; services: ServiceSummary[] }) {
   const [query, setQuery] = useState("");
+  const [valueMatches, setValueMatches] = useState<VariableSearchMatch[]>([]);
+  const [searchingValues, setSearchingValues] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const editing = useDialogTarget<ServiceSummary>();
   const deleting = useDialogTarget<ServiceSummary>();
 
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) {
+      setValueMatches([]);
+      setSearchError(null);
+      setSearchingValues(false);
+      return;
+    }
+
+    let current = true;
+    const timer = window.setTimeout(() => {
+      setSearchingValues(true);
+      setSearchError(null);
+      searchEnvironmentVars(environment.id, term)
+        .then((result) => {
+          if (!current) return;
+          if (result.ok) setValueMatches(result.matches);
+          else {
+            setValueMatches([]);
+            setSearchError(result.error);
+          }
+        })
+        .catch(() => {
+          if (current) setSearchError("Could not search environment values. Please try again.");
+        })
+        .finally(() => {
+          if (current) setSearchingValues(false);
+        });
+    }, 250);
+
+    return () => {
+      current = false;
+      window.clearTimeout(timer);
+    };
+  }, [environment.id, query]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return services;
-    return services.filter((s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q));
+    return services.filter((s) =>
+      s.name.toLowerCase().includes(q) ||
+      s.description.toLowerCase().includes(q) ||
+      s.developers.some((developer) => developer.name.toLowerCase().includes(q) || developer.email.toLowerCase().includes(q)),
+    );
   }, [services, query]);
 
   return (
@@ -50,7 +93,7 @@ export function ServicesPanel({ environment, services }: { environment: Environm
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search services…"
+              placeholder="Search services, developers, variables, or values…"
               className="h-9 bg-background pl-8"
             />
           </div>
@@ -99,6 +142,11 @@ export function ServicesPanel({ environment, services }: { environment: Environm
                 {service.description && (
                   <p className="truncate text-xs text-muted-foreground">{service.description}</p>
                 )}
+                {service.developers.length > 0 && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    Backend: {service.developers.map((developer) => `${developer.name} (${developer.email})`).join(", ")}
+                  </p>
+                )}
               </div>
               <span
                 className={cn(
@@ -143,6 +191,35 @@ export function ServicesPanel({ environment, services }: { environment: Environm
             </li>
           ))}
         </ul>
+      )}
+
+      {query.trim().length >= 2 && (
+        <section className="grid gap-3" aria-live="polite">
+          <div>
+            <h3 className="text-sm font-semibold">Matching environment values</h3>
+            <p className="text-xs text-muted-foreground">Searching keys and values in {environment.name}</p>
+          </div>
+          {searchingValues ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Searching values…</p>
+          ) : searchError ? (
+            <p className="text-sm text-destructive">{searchError}</p>
+          ) : valueMatches.length ? (
+            <ul className="grid gap-2">
+              {valueMatches.map((match) => (
+                <li key={`${match.serviceId}:${match.key}`} className="min-w-0 rounded-lg border bg-background p-3">
+                  <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs">
+                    <span className="font-medium">{match.serviceName}</span>
+                    <code className="text-muted-foreground">{match.key}</code>
+                  </div>
+                  <code className="block max-h-32 overflow-auto break-all whitespace-pre-wrap rounded bg-muted/50 p-2 text-xs">{match.value || "(empty value)"}</code>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">No environment values match “{query.trim()}”.</p>
+          )}
+          {!searchingValues && valueMatches.length === 50 && <p className="text-xs text-muted-foreground">Showing the first 50 matches.</p>}
+        </section>
       )}
 
       <ServiceDialog open={creating} onOpenChange={setCreating} environmentId={environment.id} />

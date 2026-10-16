@@ -28,6 +28,7 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [onlyDown, setOnlyDown] = useState(false);
+  const [onlyNotDeployed, setOnlyNotDeployed] = useState(false);
   const [patternOpen, setPatternOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const [pending, startTransition] = useTransition();
@@ -65,6 +66,7 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
   const services = board.services.filter((s) => {
     if (query && !s.name.toLowerCase().includes(query.trim().toLowerCase())) return false;
     if (onlyDown) return board.environments.some((e) => checkFor(s.id, e.id)?.state === "down");
+    if (onlyNotDeployed) return board.environments.some((e) => checkFor(s.id, e.id)?.state === "not_deployed");
     return true;
   });
 
@@ -114,11 +116,22 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
           <button
             key={key}
             type="button"
-            onClick={() => key === "down" && setOnlyDown((v) => !v)}
+            onClick={() => {
+              if (key === "down") {
+                setOnlyDown((v) => !v);
+                setOnlyNotDeployed(false);
+              }
+              if (key === "not_deployed") {
+                setOnlyNotDeployed((v) => !v);
+                setOnlyDown(false);
+              }
+            }}
             className={cn(
               "flex items-center gap-3 rounded-xl bg-background p-4 text-left ring-1 ring-foreground/10",
               key === "down" && "cursor-pointer hover:ring-red-300",
               key === "down" && onlyDown && "ring-2 ring-red-400",
+              key === "not_deployed" && "cursor-pointer hover:ring-red-300",
+              key === "not_deployed" && onlyNotDeployed && "ring-2 ring-red-400",
             )}
           >
             <StatusDot state={key} />
@@ -226,7 +239,7 @@ export function StatusBoardView({ board }: { board: StatusBoard }) {
                 {services.length === 0 && (
                   <tr>
                     <td colSpan={board.environments.length + 1} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                      {onlyDown ? "Nothing is down." : "No services match."}
+                      {onlyDown ? "Nothing is down." : onlyNotDeployed ? "No services are marked not deployed." : "No services match."}
                     </td>
                   </tr>
                 )}

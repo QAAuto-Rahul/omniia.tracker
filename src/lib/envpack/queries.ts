@@ -42,6 +42,7 @@ export async function listServices(environmentId: number): Promise<ServiceSummar
       id: s._id,
       name: s.name,
       description: s.description,
+      developers: s.developers ?? [],
       var_count: st?.inEnv ?? 0,
       total_var_count: st?.total ?? 0,
       updated_at: iso(updated),
@@ -80,9 +81,48 @@ export async function getServiceDetail(serviceId: number, environmentId: number)
   const countBy = new Map(counts.map((c) => [c._id, c.n]));
 
   return {
-    service: { id: service._id, name: service.name, description: service.description },
+    service: { id: service._id, name: service.name, description: service.description, developers: service.developers ?? [] },
     environment: { id: environment._id, name: environment.name },
     vars,
     envCounts: envs.map((e) => ({ id: e._id, name: e.name, var_count: countBy.get(e._id) ?? 0 })),
   };
+}
+
+export type DependencyGraph = {
+  services: { id: number; name: string }[];
+  edges: { from: number; to: number }[];
+};
+
+/** Infer service calls by matching URLs in a service's environment values to health-check URLs. */
+export async function getDependencyGraph(environmentId: number): Promise<DependencyGraph> {
+  await requireUser();
+  const [services, checks, rows] = await Promise.all([
+    (await col("services")).find({}, { projection: { name: 1 } }).sort({ name: 1 }).collation(CI).toArray(),
+    (await col("health_checks")).find({ environment_id: environmentId }, { projection: { service_id: 1, url: 1 } }).toArray(),
+    (await col("env_vars")).find({ environment_id: environmentId }, { projection: { service_id: 1, value_enc: 1 } }).toArray(),
+  ]);
+  const urlHost = (value: string) => {
+    try { return new URL(value).host.toLowerCase(); } catch { return null; }
+  };
+  const targetByHost = new Map<string, number>();
+  for (const check of checks) {
+    const host = urlHost(check.url);
+    if (host) targetByHost.set(host, check.service_id);
+  }
+  const edgeKeys = new Set<string>();
+  const edges: DependencyGraph["edges"] = [];
+  for (const row of rows) {
+    const value = decryptValue(row.value_enc);
+    const urls = value.match(/https?:\/\/[^\s"'<>),]+/gi) ?? [];
+    for (const candidate of urls) {
+      const host = urlHost(candidate.replace(/[.;]+$/, ""));
+      const target = host ? targetByHost.get(host) : undefined;
+      if (target == null || target === row.service_id) continue;
+      const key = `${row.service_id}:${target}`;
+      if (edgeKeys.has(key)) continue;
+      edgeKeys.add(key);
+      edges.push({ from: row.service_id, to: target });
+    }
+  }
+  return { services: services.map((service) => ({ id: service._id, name: service.name })), edges };
 }
